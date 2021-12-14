@@ -18,21 +18,9 @@ export class SpectralClustering {
     }
 
     public compute(options = new Map<string, string|number>()):void{
-        const defaultOptions = new Map<string, string|number>([
-            ["laplacianMatrix" , "connected"],
-            ["requestedNbClusters", -1],
-            ["maxClusters" , 8]
-        ]);
-        const runningOptions = Utils.resolveRunningParameters(defaultOptions, options);
+        const runningOptions = this.getRunningOptions(options);
 
-        let laplacianMatrix = null; 
-        if (runningOptions.get("laplacianMatrix") == "connected"){
-            laplacianMatrix = this.extractStrictLaplacianMatrix();
-        }else{
-            laplacianMatrix = this.extractDistanceLaplacianMatrix();
-        }
-
-        const eigen = new EigenvalueDecomposition(laplacianMatrix, {assumeSymmetric: true});
+        const eigen = this.getEigenDecomposition(runningOptions);
         const nodes = this.graph.getNodes();
 
         // the eigen vectors & values are already sorted
@@ -58,6 +46,44 @@ export class SpectralClustering {
             const nodeI = nodes[i];
             nodeI.setCluster(clusterResult[i]);
         }
+    }
+
+    public getProjection(options = new Map<string, string|number>(), dimensions): {[id:string]: [number]}[]{
+        const runningOptions = this.getRunningOptions(options);
+
+        const eigen = this.getEigenDecomposition(runningOptions);
+        const nodes = this.graph.getNodes();
+        let projections: {[id:string]: [number]}[] = [];
+
+        for (let i = 0; i < nodes.length; i++){
+            const node = nodes[i];
+            const row = eigen.eigenvectorMatrix.getRow(i);
+            projections[node.getId()] = row.slice(1, dimensions + 1);
+        }
+
+        return projections;
+    }
+
+    private getEigenDecomposition(runningOptions: Map<string, string | number>) {
+        let laplacianMatrix = null;
+        if (runningOptions.get("laplacianMatrix") == "connected") {
+            laplacianMatrix = this.extractStrictLaplacianMatrix();
+        } else {
+            laplacianMatrix = this.extractDistanceLaplacianMatrix();
+        }
+
+        const eigen = new EigenvalueDecomposition(laplacianMatrix, { assumeSymmetric: true });
+        return eigen;
+    }
+
+    private getRunningOptions(options: Map<string, string | number>) {
+        const defaultOptions = new Map<string, string | number>([
+            ["laplacianMatrix", "connected"],
+            ["requestedNbClusters", -1],
+            ["maxClusters", 8]
+        ]);
+        const runningOptions = Utils.resolveRunningParameters(defaultOptions, options);
+        return runningOptions;
     }
 
     private extractStrictLaplacianMatrix(): Matrix{
